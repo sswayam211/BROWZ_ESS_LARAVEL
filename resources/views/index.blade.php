@@ -193,7 +193,7 @@
                 </div>
                 <div class="row justify-content-between mb-3">
                     <div class="col">
-                        <input type="checkbox" name="REMEMBER_ME" id="REMEMBER_ME" {{ old('REMEMBER_ME', $rememberMe ?? false) ? 'checked' : '' }}>
+                        <input type="checkbox" name="REMEMBER_ME" id="REMEMBER_ME" checked>
                         <label class="form-label" for="REMEMBER_ME">Remember me</label>
                     </div>
                     <div class="col">
@@ -212,3 +212,5 @@
         </div>
     </div>
 </body>
+
+</html>

@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 // use Carbon\Carbon;
 
+
 // using to directly fetch data without models
 use Illuminate\Support\Facades\DB;
 use PDO;
@@ -22,62 +23,79 @@ class AppraisalController extends Controller
     // verify login
     public function verifyLogin(Request $request)
     {
+        // echo 'Login process';
         $request->validate([
-            'LOGIN_ID' => 'required | string',
+            'LOGIN_ID' => 'required|string',
             'LOGIN_PASSWORD' => 'required'
         ]);
 
-        $user = Login::where('USER_ID', $request->input('LOGIN_ID'))
+        $user = DB::table('PAY_MENU_USER')
+            ->where('USER_ID', $request->LOGIN_ID)
             ->where('USER_DISABLE_FLAG', 'N')
             ->first();
 
         if (!$user) {
-            return back()->withErrors(['login' => 'Invalid User Id']);
+            return back()->withErrors([
+                'login' => 'Invalid User Id'
+            ]);
         }
 
-        if (! Hash::check($request->LOGIN_PASSWORD, $user->USER_PASSWD)) {
-            return back()->withErrors(['login' => 'Invalid Password'])->withInput();
+        if (!Hash::check($request->LOGIN_PASSWORD, $user->USER_PASSWD)) {
+            return back()
+                ->withErrors(['login' => 'Invalid Password'])
+                ->withInput();
         }
 
-        // Fetch employee data to get company code
         $employee = DB::table('PM_EMP_KEY')
             ->where('EMP_CODE', $user->USER_ID)
             ->first();
 
-        // login success (custom session)
+        $request->session()->regenerate();
+
         session([
             'user_id' => $user->USER_ID,
             'logged_in' => true,
-            'user' => $user->toArray(),
             'company_code' => $employee->EMP_COMP_CODE ?? null,
         ]);
 
-        $remember = $request->has('REMEMBER_ME');
-        $rememberDuration = 60 * 24 * 30; // 30 days
+        // echo session("user_id");
+
         $response = redirect()->route('dashboard');
 
-        if ($remember) {
-            $response = $response
-                ->withCookie(cookie('LOGIN_ID', $request->LOGIN_ID, $rememberDuration))
-                ->withCookie(cookie('LOGIN_PASSWORD', $request->LOGIN_PASSWORD, $rememberDuration))
-                ->withCookie(cookie('REMEMBER_ME', '1', $rememberDuration));
-        } else {
-            $response = $response
-                ->withCookie(cookie()->forget('LOGIN_ID'))
-                ->withCookie(cookie()->forget('LOGIN_PASSWORD'))
-                ->withCookie(cookie()->forget('REMEMBER_ME'));
+        if ($request->has('REMEMBER_ME')) {
+
+            $minutes = 60 * 24 * 30;
+
+            $response->withCookie(
+                cookie(
+                    'LOGIN_ID',
+                    $request->LOGIN_ID,
+                    $minutes,
+                    null,
+                    null,
+                    true,
+                    true
+                )
+            );
         }
 
         return $response;
     }
 
     // logout user
-    public function logout()
+    public function logout(Request $request)
     {
-        session_start();
-        session_destroy();
-        return redirect('/');
+        $request->session()->flush();
+
+        $request->session()->invalidate();
+
+        $request->session()->regenerateToken();
+
+        return view('logout');
+        // ->withCookie(cookie()->forget('LOGIN_ID'))
+        // ->withCookie(cookie()->forget('REMEMBER_ME'));
     }
+
 
     /**
      * Display dashboard with employee data
@@ -137,6 +155,10 @@ class AppraisalController extends Controller
     // display kpis already added to user
     public function ShowKPIData()
     {
+        // Check if user is logged in
+        if (!session('logged_in')) {
+            return redirect('/')->withErrors(['login' => 'Please log in first']);
+        }
         $KPI_DATA = DB::table('PM_APPRAISAL_KPI')
             ->get();
         return view('APPRAISAL.MASTER.KPI_MASTER', compact('KPI_DATA'));
@@ -146,6 +168,10 @@ class AppraisalController extends Controller
     // show kpi form
     public function ShowKpiForm()
     {
+        // Check if user is logged in
+        if (!session('logged_in')) {
+            return redirect('/')->withErrors(['login' => 'Please log in first']);
+        }
 
         $FORM_TYPE = request('STATUS');
         $KPI_SYS_ID = request('KPI_SYS_ID') ?? NULL;
@@ -198,6 +224,11 @@ class AppraisalController extends Controller
     // add new / update kpi data
     public function AddUpdateKpiData(Request $request)
     {
+
+        // Check if user is logged in
+        if (!session('logged_in')) {
+            return redirect('/')->withErrors(['login' => 'Please log in first']);
+        }
         $LOGIN_USER_ID = session('user_id');
         $KPI_SYS_ID  = $request->input('KPI_CODE');
         $KPI_NAME    = $request->input('KPI_NAME');
@@ -254,6 +285,11 @@ class AppraisalController extends Controller
     // show appraisal to supervisor
     public function showAppraisal()
     {
+
+        // Check if user is logged in
+        if (!session('logged_in')) {
+            return redirect('/')->withErrors(['login' => 'Please log in first']);
+        }
         $employeeId = session('user_id');
 
         //  Get employee codes where SEQ_NO = 1 (direct reports)
@@ -427,6 +463,12 @@ class AppraisalController extends Controller
                 $emp->startTextColor = 'green';
                 $emp->color          = 'blue';
                 $emp->text           = 'HR-Pending';
+            } elseif (!empty($APAH_S1_APP_UID) && !empty($APAH_S2_APP_UID) && empty($APAH_HR_APP_UID) && ($ALL_SEQ_NO_ARRY[2] ?? '') == '3') {
+                // Self-eval done, waiting for HR approval
+                $emp->startText      = 'Completed';
+                $emp->startTextColor = 'green';
+                $emp->color          = 'blue';
+                $emp->text           = 'HR-Pending';
             }
         }
 
@@ -441,6 +483,10 @@ class AppraisalController extends Controller
     public function ShowAppraisalForm()
     {
 
+        // Check if user is logged in
+        if (!session('logged_in')) {
+            return redirect('/')->withErrors(['login' => 'Please log in first']);
+        }
         $FORM_TYPE = 'SUGGEST_APPRAISAL';
         $APRSL_EMP_CODE = request('APRSL_EMP_CODE');
         $LOGIN_USER_ID = session('user_id');
@@ -712,6 +758,10 @@ class AppraisalController extends Controller
     // function to save appraisal data
     public function SaveAppraisalDataBySup(Request $request)
     {
+        // Check if user is logged in
+        if (!session('logged_in')) {
+            return redirect('/')->withErrors(['login' => 'Please log in first']);
+        }
 
         $companyCode = session('company_code');
         $userId      = session('user_id');
@@ -868,6 +918,10 @@ class AppraisalController extends Controller
     // show appraisal suggestions to am and hr
     public function ShowAppraisalSuggestions()
     {
+        // Check if user is logged in
+        if (!session('logged_in')) {
+            return redirect('/')->withErrors(['login' => 'Please log in first']);
+        }
 
         $LOGIN_USER_ID = session('user_id');
 
@@ -875,9 +929,9 @@ class AppraisalController extends Controller
                             SELECT *
                             FROM PT_APPRAISAL_APPL_HEAD H
                             JOIN EMP_AUTH_USER A 
-                                ON A.EAU_EMP_CODE = H.APAH_EMP_CODE
+                                ON A.EAU_EMP_CODE COLLATE utf8mb4_unicode_ci = H.APAH_EMP_CODE
                             JOIN PM_EMP_KEY EMP
-                                ON EMP.EMP_CODE = H.APAH_EMP_CODE
+                                ON EMP.EMP_CODE COLLATE utf8mb4_unicode_ci = H.APAH_EMP_CODE
                             WHERE A.EAU_CODE = '$LOGIN_USER_ID'
                             AND A.EAU_FRZ_FLAG = 'N'
                             AND A.EAU_SEQ_NO IN (2,3)
@@ -1117,6 +1171,11 @@ class AppraisalController extends Controller
 
     public function ShowApproveAppraisalForm()
     {
+        // Check if user is logged in
+        if (!session('logged_in')) {
+            return redirect('/')->withErrors(['login' => 'Please log in first']);
+        }
+
         $FORM_TYPE = 'APPROVE_APPRAISAL';
 
         $APAH_SYS_ID = request('appr_code');
@@ -1470,6 +1529,10 @@ class AppraisalController extends Controller
     // new code for diffrent type of appraisal 
     public function SaveAppraisalDataByAMHR(Request $request)
     {
+        // Check if user is logged in
+        if (!session('logged_in')) {
+            return redirect('/')->withErrors(['login' => 'Please log in first']);
+        }
 
         $companyCode         = session('company_code');
         $LOGIN_USER_ID       = session('user_id');
@@ -1616,6 +1679,12 @@ class AppraisalController extends Controller
     // download approved appraisal final print
     public function DownloadAppraisalFinalPrint(Request $request)
     {
+
+        // Check if user is logged in
+        if (!session('logged_in')) {
+            return redirect('/')->withErrors(['login' => 'Please log in first']);
+        }
+
         $APPR_SYS_ID = $request->download_appr_code;
 
         if (empty($APPR_SYS_ID)) {

@@ -1,7 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Symfony\Component\Routing\Route as RoutingRoute;
+// use Symfony\Component\Routing\Route as RoutingRoute;
 use App\Http\Controllers\AppraisalController;
 
 
@@ -10,17 +10,19 @@ Route::get('/', function () {
     return view('index', [
         'loginId' => request()->cookie('LOGIN_ID'),
         'loginPassword' => request()->cookie('LOGIN_PASSWORD'),
-        'rememberMe' => request()->cookie('REMEMBER_ME'),
+        'rememberMe' => request()->cookie('REMEMBER_ME')
     ]);
 });
 
 
 // show all login data
-Route::resource('showLoginData', AppraisalController::class);
+// Route::get('logout', function () {
+//     return view('logout');
+// });
 
 
 // logout route
-Route::get('/logout',[AppraisalController::class,'logout'])->name('logout');
+Route::get('logout', [AppraisalController::class, 'logout'])->name('logout');
 
 
 // route to handle post request when login
@@ -60,12 +62,12 @@ Route::post('/download-appraisal', [AppraisalController::class, 'DownloadApprais
 
 
 // route to open kpi master
-Route::get('/kpi-master',[AppraisalController::class,'ShowKPIData'])->name('appraisal.kpi-master');
+Route::get('/kpi-master', [AppraisalController::class, 'ShowKPIData'])->name('appraisal.kpi-master');
 
 
 // route to display kpi add/update form
-Route::get('/kpi-add-update-form',[AppraisalController::class,'ShowKpiForm'])->name('appraisal.kpi-form');
+Route::get('/kpi-add-update-form', [AppraisalController::class, 'ShowKpiForm'])->name('appraisal.kpi-form');
 
 
 // route to add and update kpi data
-Route::post('/handle-kpi-data',[AppraisalController::class,'AddUpdateKpiData'])->name('appraisal.kpi-add-update');
+Route::post('/handle-kpi-data', [AppraisalController::class, 'AddUpdateKpiData'])->name('appraisal.kpi-add-update');
